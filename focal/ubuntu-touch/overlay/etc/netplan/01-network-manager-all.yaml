@@ -1,0 +1,13 @@
+# Let NetworkManager manage all devices on this system
+#
+# Netplan achieves this by overriding NM's 10-globally-managed-devices.conf,
+# which, in Ubuntu, defaults NM not to manage anything except Wi-Fi and mobile
+# data, via /run/NetworkManager/conf.d/. (Wonder why it's documented in this
+# file? because both the config and the override are woefully not documented.
+# https://pad.lv/1962214)
+#
+# This file is placed by UBport's rootfs-builder-debos.
+
+network:
+  version: 2
+  renderer: NetworkManager
