@@ -1,0 +1,7 @@
+#!/bin/sh
+
+set -ex
+
+# custom dconf default values may be set via overlay files, update the
+# corresponding dconf system databases here
+/bin/dconf update
