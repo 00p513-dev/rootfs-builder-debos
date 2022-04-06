@@ -60,6 +60,12 @@ actions:
     description: Adding PDK overlay
     destination: /
 
+  - action: run
+    descriptions: Run PDK hooks
+    chroot: true
+    script: ./pdk/hooks/run-hooks.sh
+    label: run-parts
+
   - action: image-partition
     description: Creating image
     imagename: {{ $image }}
