@@ -30,14 +30,14 @@ fi
 apt-get update
 apt-get dist-upgrade -y --allow-downgrades
 
-apt-get install -y bluebinder ofono-ril-binder-plugin pulseaudio-modules-droid-28
+apt-get install -y bluebinder ofono-ril-binder-plugin pulseaudio-modules-droid-28 pulseaudio-modules-droid-30
 # sensorfw
 apt-get remove -y qtubuntu-sensors
 apt-get install -y libsensorfw-qt5-hybris libsensorfw-qt5-configs libsensorfw-qt5-plugins libqt5sensors5-sensorfw qtubuntu-position
 # hfd-service
 apt-get install -y hfd-service libqt5feedback5-hfd hfd-service-tools
 # in-call audio
-apt-get install -y pulseaudio-modules-droid-hidl-28 audiosystem-passthrough
+apt-get install -y pulseaudio-modules-droid-hidl-28 pulseaudio-modules-droid-hidl-30 audiosystem-passthrough
 
 # Restore symlink
 rm /etc/resolv.conf
