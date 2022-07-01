@@ -87,13 +87,13 @@ fi
 
 if [ "$GITLAB" == "1" ]; then
     echo "Looking for repo '$PROJECT' on GitLab (core)"
-    tryPull "https://gitlab.com/ubports/core/$PROJECT"
+    tryPull "https://gitlab.com/ubports/development/core/$PROJECT"
 
     echo "Looking for repo '$PROJECT' on GitLab (core/packaging)"
-    tryPull "https://gitlab.com/ubports/core/packaging/$PROJECT"
+    tryPull "https://gitlab.com/ubports/development/core/packaging/$PROJECT"
 
     echo "Looking for repo '$PROJECT' on GitLab (core/lib-cpp)"
-    tryPull "https://gitlab.com/ubports/core/lib-cpp/$PROJECT"
+    tryPull "https://gitlab.com/ubports/development/core/lib-cpp/$PROJECT"
 fi
 
 if [ "$GITHUB" == "1" ]; then
