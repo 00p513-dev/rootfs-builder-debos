@@ -37,6 +37,13 @@ actions:
       initramfs-tools
     label: apt-install.sh
 
+  - action: run
+    description: Development packages
+    chroot: true
+    script: >-
+      ../scripts/apt-install.sh --no-install-recommends
+      git build-essential devscripts equivs
+
 {{ if eq $architecture "arm64" }}
   - action: run
     chroot: true
