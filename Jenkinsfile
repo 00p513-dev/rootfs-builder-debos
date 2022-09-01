@@ -1,3 +1,5 @@
+@Library("ubports-build-tools") _
+
 String cron_string = BRANCH_NAME == 'master' ? 'H 3 * * *' : ''
 
 def build_image = {
@@ -94,6 +96,21 @@ pipeline {
                 deleteDir()
               }
             }
+          }
+        }
+      }
+    }
+  }
+  post {
+    always {
+      node(null /* means any node */) {
+        script {
+          if (env.BRANCH_NAME == 'master') {
+            notifyBuildStatus(
+              currentBuild,
+              /* jobDescription */ "Focal rootfs builds",
+              /* jobUrl */ env.JOB_URL
+            );
           }
         }
       }
