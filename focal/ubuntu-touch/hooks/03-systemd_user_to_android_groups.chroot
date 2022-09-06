@@ -6,3 +6,6 @@
 
 # systemd-resolved requires internet access to resolve DNS.
 usermod -a -G android_net systemd-resolve
+
+# systemd-timesyncd connects to NTP servers.
+usermod -a -G android_net systemd-timesync
