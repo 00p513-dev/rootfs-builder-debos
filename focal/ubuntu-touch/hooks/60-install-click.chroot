@@ -1,0 +1,34 @@
+#!/bin/sh
+
+set -ex
+
+echo "Setting up click packages"
+
+mydir=$(dirname "$0")/60-install-click
+CLICKARCH=$(dpkg --print-architecture)
+click_db=/usr/share/click/preinstalled
+
+mkdir -p -m 755 "$click_db"
+chown clickpkg:clickpkg "$click_db"
+
+tmpdir="$(mktemp -d)"
+cleanup () { rm -rf "$tmpdir"; }
+trap cleanup EXIT
+
+# Instead of using a CI job pull from OpenStore and then fetching from that,
+# just run the script to fetch from OpenStore directly here!
+
+python3 "${mydir}/click_importer.py" \
+    --file="${mydir}/clicks.list" \
+    --architecture="$CLICKARCH" \
+    --channel=focal \
+    --dir="${tmpdir}"
+
+for click in "${tmpdir}"/*.click; do
+    click install \
+        --force-missing-framework \
+        --root="$click_db" \
+        --all-users \
+        --allow-unauthenticated \
+        "$click"
+done

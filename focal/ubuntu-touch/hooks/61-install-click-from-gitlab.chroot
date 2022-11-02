@@ -1,0 +1,47 @@
+#!/bin/sh -ex
+
+# This script pulls the built clicks from the GitLab CI jobs. It's intended
+# to be temporary while we setup our pipeline to upload these new apps to
+# OpenStore's Focal branch.
+
+CLICKARCH=$(dpkg --print-architecture)
+click_db=/usr/share/click/preinstalled
+
+# Add to this list when "port to focal" MR is merged. Remove to this list
+# (and add to 60-install-click/clicks.list) once it's uploaded to OpenStore.
+gitlab_repo_list='
+lomiri-calculator-app
+lomiri-clock-app
+lomiri-gallery-app
+lomiri-terminal-app
+'
+
+tmpdir="$(mktemp -d)"
+cleanup () { rm -rf "$tmpdir"; }
+trap cleanup EXIT
+
+for gitlab_repo in $gitlab_repo_list; do
+    mkdir "${tmpdir}/${gitlab_repo}"
+
+    # This code relies on GitLab CI jobs being setup in a certain way.
+    # See: https://docs.gitlab.com/ee/api/job_artifacts.html#download-the-artifacts-archive
+    for job_name in "build-${CLICKARCH}" "build"; do
+        if wget -O "${tmpdir}/${gitlab_repo}/artifacts.zip" \
+            "https://gitlab.com/api/v4/projects/ubports%2Fdevelopment%2Fapps%2F${gitlab_repo}/jobs/artifacts/main/download?job=${job_name}" \
+        ; then
+            break
+        fi
+    done
+
+    # This, again, relies on GitLab CI jobs being setup in a certain way.
+    unzip -d "${tmpdir}/${gitlab_repo}" \
+        "${tmpdir}/${gitlab_repo}/artifacts.zip" \
+        'build/*/app/*.click'
+
+    click install \
+        --force-missing-framework \
+        --root="$click_db" \
+        --all-users \
+        --allow-unauthenticated \
+        "${tmpdir}/${gitlab_repo}"/build/*/app/*.click
+done
