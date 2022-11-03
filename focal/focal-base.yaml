@@ -5,7 +5,7 @@
 # the default for this has to be false, hence the name.
 {{- $skip_remove_apt_user := or .skip_remove_apt_user false }}
 
-{{- $ubuntu_base := print "ubuntu-base-20.04.3-base-" $architecture ".tar.gz" }}
+{{- $ubuntu_base := print "ubuntu-base-20.04.5-base-" $architecture ".tar.gz" }}
 
 architecture: {{ $architecture }}
 actions:
