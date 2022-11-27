@@ -11,9 +11,15 @@ click_db=/usr/share/click/preinstalled
 # (and add to 60-install-click/clicks.list) once it's uploaded to OpenStore.
 gitlab_repo_list='
 lomiri-calculator-app
+lomiri-calendar-app
+lomiri-camera-app
 lomiri-clock-app
+lomiri-filemanager-app
 lomiri-gallery-app
+lomiri-music-app
+lomiri-notes-app
 lomiri-terminal-app
+lomiri-weather-app
 '
 
 tmpdir="$(mktemp -d)"
