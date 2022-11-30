@@ -51,7 +51,7 @@ actions:
     chroot: true
     script: >-
       ../scripts/add-and-pin-repo.sh
-      http://repo2.ubports.com/ focal 2000
+      http://repo.ubports.com/ focal 2000
       {{ $additional_apt_repos }}
     label: add-and-pin-repo.sh
 
