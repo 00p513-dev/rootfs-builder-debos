@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -e
+
 CHANNEL=${1:-devel}
 
 # Temporary set up the nameserver
