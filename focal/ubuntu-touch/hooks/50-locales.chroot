@@ -1,0 +1,64 @@
+#!/bin/bash -ef
+
+# This script adds locales to the system by configuring a related debconf
+# question. Do this instead of installing Ubuntu language packs because they
+# come with many of translations we'll never use.
+#
+# Currently the code determines which locale to install by seeing if such locale
+# has a "sufficient enough" lomiri-system-settings' translation. This is
+# intended to be temporary: long-term solution should involve querying Weblate
+# or some translation portal for languages with >= 70% coverage.
+
+log() {
+    if [ -n "$DEBUG" ]; then
+        echo "$@" >&2
+    fi
+}
+
+has_lss_translation() {
+    for l in ${1//.UTF-8} ${1//@*} ${1//_*}; do
+        if ! size=$(stat --format=%s \
+                    "/usr/share/locale/${l}/LC_MESSAGES/lomiri-system-settings.mo" \
+                    2>/dev/null); then
+            continue
+        fi
+
+        # A threshold of 10KB is choosen in Lomiri System Settings.
+        if [ "$size" -gt 10240 ]; then
+            return 0
+        else
+            log "Locale '${1}' is skipped since the translation for Lomiri is too small."
+            return 1
+        fi
+    done
+
+    log "Locale '${1}' is skipped since a translation for Lomiri doesn't exist."
+    return 1
+}
+
+selected_locales=""
+
+while read -r locale charset; do
+    if [ "$charset" != "UTF-8" ]; then
+        # Non-UTF-8 locales is sort of obsoleted.
+        continue
+    fi
+
+    # English is the native UI language, and so doesn't necessarily need a
+    # translation.
+    if [[ "${locale}" =~ ^en ]] || has_lss_translation "$locale"; then
+        selected_locales+="${locale} ${charset}, "
+    fi
+done </usr/share/i18n/SUPPORTED
+
+# Remove the last comma and a space.
+selected_locales=${selected_locales%??}
+
+# Remove this file, as otherwise locales's config script will pick this up instead
+# of the values we set below.
+rm /etc/locale.gen
+
+# Note: field seperators here are tabs, not spaces.
+echo "locales	locales/locales_to_be_generated	multiselect	${selected_locales}" | \
+    debconf-set-selections --verbose
+DEBIAN_FRONTEND=noninteractive dpkg-reconfigure locales
