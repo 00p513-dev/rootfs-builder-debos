@@ -1,64 +1,100 @@
-#!/bin/bash -ef
-
-# This script adds locales to the system by configuring a related debconf
-# question. Do this instead of installing Ubuntu language packs because they
-# come with many of translations we'll never use.
+#!/usr/bin/python3
 #
-# Currently the code determines which locale to install by seeing if such locale
-# has a "sufficient enough" lomiri-system-settings' translation. This is
-# intended to be temporary: long-term solution should involve querying Weblate
-# or some translation portal for languages with >= 70% coverage.
+# This script adds locales to the system by configuring a related debconf
+# question. This is preferred over installing Ubuntu language packs because
+# they include translations for many packages are not used in Ubuntu Touch.
+#
+# Locales are selected based on the translation coverage of the Lomiri project
+# on Weblate.  Specifically, if the translation coverage of the language of a
+# locale is equal or higher than 70% the corresponding locale is added.
+#
 
-log() {
-    if [ -n "$DEBUG" ]; then
-        echo "$@" >&2
-    fi
-}
 
-has_lss_translation() {
-    for l in ${1//.UTF-8} ${1//@*} ${1//_*}; do
-        if ! size=$(stat --format=%s \
-                    "/usr/share/locale/${l}/LC_MESSAGES/lomiri-system-settings.mo" \
-                    2>/dev/null); then
-            continue
-        fi
+import os
+import pprint
+import requests
+import subprocess
+import logging
+from pathlib import Path
 
-        # A threshold of 10KB is choosen in Lomiri System Settings.
-        if [ "$size" -gt 10240 ]; then
-            return 0
-        else
-            log "Locale '${1}' is skipped since the translation for Lomiri is too small."
-            return 1
-        fi
-    done
 
-    log "Locale '${1}' is skipped since a translation for Lomiri doesn't exist."
-    return 1
-}
+def parse_locale(s):
+    # format: language[_territory][.codeset][@modifier]
+    result = []
+    for delim in ("@", ".", "_"):
+        try:
+            s, part = s.rsplit(delim, 1)
+        except ValueError:
+            part = None
+        result.append(part)
+    result.append(s)
+    return tuple(reversed(result))
 
-selected_locales=""
 
-while read -r locale charset; do
-    if [ "$charset" != "UTF-8" ]; then
-        # Non-UTF-8 locales is sort of obsoleted.
-        continue
-    fi
+def select_locales(threshold=0.0):
+    logging.debug("fetching language data from hosted.weblate.org")
+    r = requests.get(
+        "https://hosted.weblate.org/api/projects/lomiri/languages/"
+    )
+    r.raise_for_status()
+    lang_coverage = {l["code"]: l["translated_percent"] for l in r.json()}
 
-    # English is the native UI language, and so doesn't necessarily need a
-    # translation.
-    if [[ "${locale}" =~ ^en ]] || has_lss_translation "$locale"; then
-        selected_locales+="${locale} ${charset}, "
-    fi
-done </usr/share/i18n/SUPPORTED
+    selected = []
+    with open("/usr/share/i18n/SUPPORTED") as f:
+        for line in f:
+            locale, codeset = line.split()
 
-# Remove the last comma and a space.
-selected_locales=${selected_locales%??}
+            # only UTF-8 locales are supported
+            if codeset != "UTF-8":
+                continue
 
-# Remove this file, as otherwise locales's config script will pick this up instead
-# of the values we set below.
-rm /etc/locale.gen
+            lang, territory, _, _ = parse_locale(locale)
+            # English does not require translation and is always included,
+            # otherwise discard languages which do not meet the translation
+            # coverage threshold
+            try:
+                if lang != "en" and lang_coverage[lang] < threshold:
+                    logging.debug(f"discarding {locale} which does not meet "
+                                  f"the threshold ({lang_coverage[lang]}%)")
+                    continue
+            except KeyError:
+                logging.debug(f"discarding {locale} without translations")
+                continue
+            logging.debug(f"selecting {locale}")
+            selected.append(locale)
 
-# Note: field seperators here are tabs, not spaces.
-echo "locales	locales/locales_to_be_generated	multiselect	${selected_locales}" | \
-    debconf-set-selections --verbose
-DEBIAN_FRONTEND=noninteractive dpkg-reconfigure locales
+    return selected
+
+
+def main():
+    logging.basicConfig(level=logging.DEBUG)
+
+    # select locales with at least 70% coverage
+    locales = select_locales(70.0)
+
+    # remove this file, as otherwise locales's config script will pick this up
+    # instead of the values we set below
+    Path("/etc/locale.gen").unlink(missing_ok=True)
+
+    debconf_selection = (f"locales\tlocales/locales_to_be_generated\t"
+                         f"multiselect\t{', '.join(locales)}")
+    env = {
+        "PATH": os.environ["PATH"],
+        "DEBIAN_FRONTEND": "noninteractive",
+    }
+    subprocess.run(
+        ["/usr/bin/debconf-set-selections", "--verbose"],
+        env=env,
+        input=debconf_selection,
+        encoding="utf-8",
+        check=True
+    )
+    subprocess.run(
+        ["/usr/sbin/dpkg-reconfigure", "locales"],
+        env=env,
+        check=True
+    )
+
+
+if __name__ == "__main__":
+    main()
