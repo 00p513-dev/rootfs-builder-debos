@@ -18,17 +18,27 @@ import logging
 from pathlib import Path
 
 
-def parse_locale(s):
+class Locale:
     # format: language[_territory][.codeset][@modifier]
-    result = []
-    for delim in ("@", ".", "_"):
-        try:
-            s, part = s.rsplit(delim, 1)
-        except ValueError:
-            part = None
-        result.append(part)
-    result.append(s)
-    return tuple(reversed(result))
+    OPTIONAL_PARTS = (("territory", "_"), ("codeset", "."), ("modifier", "@"))
+
+    def __init__(self, s):
+        for name, delim in reversed(self.OPTIONAL_PARTS):
+            try:
+                s, value = s.rsplit(delim, 1)
+            except ValueError:
+                value = None
+            setattr(self, name, value)
+        self.language = s
+
+    def __str__(self):
+        result = [self.language]
+        for name, delim in self.OPTIONAL_PARTS:
+            value = getattr(self, name)
+            if value:
+                result.append(delim)
+                result.append(value)
+        return "".join(result)
 
 
 def select_locales(threshold=0.0):
@@ -42,26 +52,27 @@ def select_locales(threshold=0.0):
     selected = []
     with open("/usr/share/i18n/SUPPORTED") as f:
         for line in f:
-            locale, codeset = line.split()
+            s, codeset = line.split()
 
             # only UTF-8 locales are supported
             if codeset != "UTF-8":
                 continue
 
-            lang, territory, _, _ = parse_locale(locale)
+            l = Locale(s)
             # English does not require translation and is always included,
             # otherwise discard languages which do not meet the translation
             # coverage threshold
             try:
-                if lang != "en" and lang_coverage[lang] < threshold:
-                    logging.debug(f"discarding {locale} which does not meet "
-                                  f"the threshold ({lang_coverage[lang]}%)")
+                if (l.language != "en" and
+                    lang_coverage[l.language] < threshold):
+                    logging.debug(f"discarding {l} which does not meet the "
+                                  f"threshold ({lang_coverage[l.language]}%)")
                     continue
             except KeyError:
-                logging.debug(f"discarding {locale} without translations")
+                logging.debug(f"discarding {l} without translations")
                 continue
-            logging.debug(f"selecting {locale}")
-            selected.append(locale)
+            logging.debug(f"selecting {l}")
+            selected.append(l)
 
     return selected
 
@@ -70,14 +81,16 @@ def main():
     logging.basicConfig(level=logging.DEBUG)
 
     # select locales with at least 70% coverage
-    locales = select_locales(70.0)
+    selected = select_locales(70.0)
 
     # remove this file, as otherwise locales's config script will pick this up
     # instead of the values we set below
     Path("/etc/locale.gen").unlink(missing_ok=True)
 
+    debconf_locales = ", ".join([f"{l} UTF-8" for l in selected])
     debconf_selection = (f"locales\tlocales/locales_to_be_generated\t"
-                         f"multiselect\t{', '.join(locales)}")
+                         f"multiselect\t{debconf_locales}")
+
     env = {
         "PATH": os.environ["PATH"],
         "DEBIAN_FRONTEND": "noninteractive",
@@ -94,6 +107,13 @@ def main():
         env=env,
         check=True
     )
+
+    # create language pack directories for accountsservice (see
+    # https://gitlab.com/ubports/development/core/focal-projectmanagement-missing-packages/-/issues/82)
+    base_path = Path("/usr/share/locale-langpack")
+    for p in set(base_path / l.language for l in selected):
+        logging.debug(f"creating directory {p}")
+        p.mkdir(parents=True, exist_ok=True)
 
 
 if __name__ == "__main__":
