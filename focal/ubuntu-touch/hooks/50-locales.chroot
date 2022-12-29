@@ -50,6 +50,39 @@ class Locale:
         return "".join(result)
 
 
+def lookup_coverage(locale, lang_coverage):
+    # handle special cases in Weblate where non-standard locale names
+    # are used
+    l = Locale(locale)
+    l.codeset = None
+    ls = str(l)
+    if ls in WEBLATE_CODE_MAPPING:
+        code = WEBLATE_CODE_MAPPING[ls]
+        logging.debug(f"mapping {ls} to {code}")
+        return lang_coverage.get(code, 0.0)
+
+    # English does not require translation and is always included
+    if l.language == "en":
+        return 100.0
+
+    # collect coverages for translations corresponding to the locale as well as
+    # fallbacks and select the highest one
+    coverages = [lang_coverage.get(l.language, 0.0)]
+    if l.territory and l.modifier:
+        coverages.append(
+            lang_coverage.get(f"{l.language}_{l.territory}@{l.modifier}", 0.0)
+        )
+    if l.modifier:
+        coverages.append(
+            lang_coverage.get(f"{l.language}@{l.modifier}", 0.0)
+        )
+    if l.territory:
+        coverages.append(
+            lang_coverage.get(f"{l.language}_{l.territory}", 0.0)
+        )
+    return max(coverages)
+
+
 def select_locales(threshold=0.0):
     logging.debug("fetching language data from hosted.weblate.org")
     r = requests.get(
@@ -67,38 +100,14 @@ def select_locales(threshold=0.0):
             if codeset != "UTF-8":
                 continue
 
+            coverage = lookup_coverage(s, lang_coverage)
             l = Locale(s)
-
-            # handle special cases in Weblate where non-standard locale names
-            # are used
-            ll = Locale(s)
-            ll.codeset = None
-            ls = str(ll)
-            if ls in WEBLATE_CODE_MAPPING:
-                code = WEBLATE_CODE_MAPPING[ls]
-                logging.debug(f"mapping {ls} to {code}")
-                if lang_coverage.get(code, 0.0) >= threshold:
-                    logging.debug(f"selecting {l}")
-                    selected.append(l)
-                else:
-                    logging.debug(f"discarding {l} which does not meet the "
-                                  f"threshold ({lang_coverage[l.language]}%)")
-                continue
-
-            # English does not require translation and is always included,
-            # otherwise discard languages which do not meet the translation
-            # coverage threshold
-            try:
-                if (l.language != "en" and
-                    lang_coverage[l.language] < threshold):
-                    logging.debug(f"discarding {l} which does not meet the "
-                                  f"threshold ({lang_coverage[l.language]}%)")
-                    continue
-            except KeyError:
-                logging.debug(f"discarding {l} without translations")
-                continue
-            logging.debug(f"selecting {l}")
-            selected.append(l)
+            if coverage > threshold:
+                logging.debug(f"selecting {l} ({coverage}%)")
+                selected.append(l)
+            else:
+                logging.debug(f"discarding {l} which does not meet the "
+                              f"threshold ({coverage}%)")
 
     return selected
 
