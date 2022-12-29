@@ -18,6 +18,15 @@ import logging
 from pathlib import Path
 
 
+WEBLATE_CODE_MAPPING = {
+    "zh_CN": "zh_Hans",
+    "zh_SG": "zh_Hans",
+    "zh_HK": "zh_Hant",
+    "zh_MO": "zh_Hant",
+    "zh_TW": "zh_Hant",
+}
+
+
 class Locale:
     # format: language[_territory][.codeset][@modifier]
     OPTIONAL_PARTS = (("territory", "_"), ("codeset", "."), ("modifier", "@"))
@@ -59,6 +68,23 @@ def select_locales(threshold=0.0):
                 continue
 
             l = Locale(s)
+
+            # handle special cases in Weblate where non-standard locale names
+            # are used
+            ll = Locale(s)
+            ll.codeset = None
+            ls = str(ll)
+            if ls in WEBLATE_CODE_MAPPING:
+                code = WEBLATE_CODE_MAPPING[ls]
+                logging.debug(f"mapping {ls} to {code}")
+                if lang_coverage.get(code, 0.0) >= threshold:
+                    logging.debug(f"selecting {l}")
+                    selected.append(l)
+                else:
+                    logging.debug(f"discarding {l} which does not meet the "
+                                  f"threshold ({lang_coverage[l.language]}%)")
+                continue
+
             # English does not require translation and is always included,
             # otherwise discard languages which do not meet the translation
             # coverage threshold
@@ -111,9 +137,11 @@ def main():
     # create language pack directories for accountsservice (see
     # https://gitlab.com/ubports/development/core/focal-projectmanagement-missing-packages/-/issues/82)
     base_path = Path("/usr/share/locale-langpack")
-    for p in set(base_path / l.language for l in selected):
-        logging.debug(f"creating directory {p}")
-        p.mkdir(parents=True, exist_ok=True)
+    for l in selected:
+        l.codeset = None
+        d = base_path / str(l)
+        logging.debug(f"creating directory {d}")
+        d.mkdir(parents=True, exist_ok=True)
 
 
 if __name__ == "__main__":
