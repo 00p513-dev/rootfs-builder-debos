@@ -1,64 +1,157 @@
-#!/bin/bash -ef
-
-# This script adds locales to the system by configuring a related debconf
-# question. Do this instead of installing Ubuntu language packs because they
-# come with many of translations we'll never use.
+#!/usr/bin/python3
 #
-# Currently the code determines which locale to install by seeing if such locale
-# has a "sufficient enough" lomiri-system-settings' translation. This is
-# intended to be temporary: long-term solution should involve querying Weblate
-# or some translation portal for languages with >= 70% coverage.
+# This script adds locales to the system by configuring a related debconf
+# question. This is preferred over installing Ubuntu language packs because
+# they include translations for many packages are not used in Ubuntu Touch.
+#
+# Locales are selected based on the translation coverage of the Lomiri project
+# on Weblate.  Specifically, if the translation coverage of the language of a
+# locale is equal or higher than 70% the corresponding locale is added.
+#
 
-log() {
-    if [ -n "$DEBUG" ]; then
-        echo "$@" >&2
-    fi
+
+import os
+import pprint
+import requests
+import subprocess
+import logging
+from pathlib import Path
+
+
+WEBLATE_CODE_MAPPING = {
+    "zh_CN": "zh_Hans",
+    "zh_SG": "zh_Hans",
+    "zh_HK": "zh_Hant",
+    "zh_MO": "zh_Hant",
+    "zh_TW": "zh_Hant",
 }
 
-has_lss_translation() {
-    for l in ${1//.UTF-8} ${1//@*} ${1//_*}; do
-        if ! size=$(stat --format=%s \
-                    "/usr/share/locale/${l}/LC_MESSAGES/lomiri-system-settings.mo" \
-                    2>/dev/null); then
-            continue
-        fi
 
-        # A threshold of 10KB is choosen in Lomiri System Settings.
-        if [ "$size" -gt 10240 ]; then
-            return 0
-        else
-            log "Locale '${1}' is skipped since the translation for Lomiri is too small."
-            return 1
-        fi
-    done
+class Locale:
+    # format: language[_territory][.codeset][@modifier]
+    OPTIONAL_PARTS = (("territory", "_"), ("codeset", "."), ("modifier", "@"))
 
-    log "Locale '${1}' is skipped since a translation for Lomiri doesn't exist."
-    return 1
-}
+    def __init__(self, s):
+        for name, delim in reversed(self.OPTIONAL_PARTS):
+            try:
+                s, value = s.rsplit(delim, 1)
+            except ValueError:
+                value = None
+            setattr(self, name, value)
+        self.language = s
 
-selected_locales=""
+    def __str__(self):
+        result = [self.language]
+        for name, delim in self.OPTIONAL_PARTS:
+            value = getattr(self, name)
+            if value:
+                result.append(delim)
+                result.append(value)
+        return "".join(result)
 
-while read -r locale charset; do
-    if [ "$charset" != "UTF-8" ]; then
-        # Non-UTF-8 locales is sort of obsoleted.
-        continue
-    fi
 
-    # English is the native UI language, and so doesn't necessarily need a
-    # translation.
-    if [[ "${locale}" =~ ^en ]] || has_lss_translation "$locale"; then
-        selected_locales+="${locale} ${charset}, "
-    fi
-done </usr/share/i18n/SUPPORTED
+def lookup_coverage(locale, lang_coverage):
+    # handle special cases in Weblate where non-standard locale names
+    # are used
+    l = Locale(locale)
+    l.codeset = None
+    ls = str(l)
+    if ls in WEBLATE_CODE_MAPPING:
+        code = WEBLATE_CODE_MAPPING[ls]
+        logging.debug(f"mapping {ls} to {code}")
+        return lang_coverage.get(code, 0.0)
 
-# Remove the last comma and a space.
-selected_locales=${selected_locales%??}
+    # English does not require translation and is always included
+    if l.language == "en":
+        return 100.0
 
-# Remove this file, as otherwise locales's config script will pick this up instead
-# of the values we set below.
-rm /etc/locale.gen
+    # collect coverages for translations corresponding to the locale as well as
+    # fallbacks and select the highest one
+    coverages = [lang_coverage.get(l.language, 0.0)]
+    if l.territory and l.modifier:
+        coverages.append(
+            lang_coverage.get(f"{l.language}_{l.territory}@{l.modifier}", 0.0)
+        )
+    if l.modifier:
+        coverages.append(
+            lang_coverage.get(f"{l.language}@{l.modifier}", 0.0)
+        )
+    if l.territory:
+        coverages.append(
+            lang_coverage.get(f"{l.language}_{l.territory}", 0.0)
+        )
+    return max(coverages)
 
-# Note: field seperators here are tabs, not spaces.
-echo "locales	locales/locales_to_be_generated	multiselect	${selected_locales}" | \
-    debconf-set-selections --verbose
-DEBIAN_FRONTEND=noninteractive dpkg-reconfigure locales
+
+def select_locales(threshold=0.0):
+    logging.debug("fetching language data from hosted.weblate.org")
+    r = requests.get(
+        "https://hosted.weblate.org/api/projects/lomiri/languages/"
+    )
+    r.raise_for_status()
+    lang_coverage = {l["code"]: l["translated_percent"] for l in r.json()}
+
+    selected = []
+    with open("/usr/share/i18n/SUPPORTED") as f:
+        for line in f:
+            s, codeset = line.split()
+
+            # only UTF-8 locales are supported
+            if codeset != "UTF-8":
+                continue
+
+            coverage = lookup_coverage(s, lang_coverage)
+            l = Locale(s)
+            if coverage > threshold:
+                logging.debug(f"selecting {l} ({coverage}%)")
+                selected.append(l)
+            else:
+                logging.debug(f"discarding {l} which does not meet the "
+                              f"threshold ({coverage}%)")
+
+    return selected
+
+
+def main():
+    logging.basicConfig(level=logging.DEBUG)
+
+    # select locales with at least 70% coverage
+    selected = select_locales(70.0)
+
+    # remove this file, as otherwise locales's config script will pick this up
+    # instead of the values we set below
+    Path("/etc/locale.gen").unlink(missing_ok=True)
+
+    debconf_locales = ", ".join([f"{l} UTF-8" for l in selected])
+    debconf_selection = (f"locales\tlocales/locales_to_be_generated\t"
+                         f"multiselect\t{debconf_locales}")
+
+    env = {
+        "PATH": os.environ["PATH"],
+        "DEBIAN_FRONTEND": "noninteractive",
+    }
+    subprocess.run(
+        ["/usr/bin/debconf-set-selections", "--verbose"],
+        env=env,
+        input=debconf_selection,
+        encoding="utf-8",
+        check=True
+    )
+    subprocess.run(
+        ["/usr/sbin/dpkg-reconfigure", "locales"],
+        env=env,
+        check=True
+    )
+
+    # create language pack directories for accountsservice (see
+    # https://gitlab.com/ubports/development/core/focal-projectmanagement-missing-packages/-/issues/82)
+    base_path = Path("/usr/share/locale-langpack")
+    for l in selected:
+        l.codeset = None
+        d = base_path / str(l)
+        logging.debug(f"creating directory {d}")
+        d.mkdir(parents=True, exist_ok=True)
+
+
+if __name__ == "__main__":
+    main()
