@@ -25,10 +25,12 @@ python3 "${mydir}/click_importer.py" \
     --dir="${tmpdir}"
 
 for click in "${tmpdir}"/*.click; do
-    click install \
-        --force-missing-framework \
-        --root="$click_db" \
-        --all-users \
-        --allow-unauthenticated \
-        "$click"
+    if [ -f "${click}" ]; then
+        click install \
+            --force-missing-framework \
+            --root="$click_db" \
+            --all-users \
+            --allow-unauthenticated \
+            "$click"
+    fi
 done
