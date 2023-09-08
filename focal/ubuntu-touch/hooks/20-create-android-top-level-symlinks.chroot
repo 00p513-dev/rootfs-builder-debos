@@ -12,7 +12,6 @@ for d in \
     factory \
     firmware \
     metadata \
-    mnt \
     odm \
     persist \
     product \
