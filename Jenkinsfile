@@ -40,7 +40,7 @@ pipeline {
         axes {
           axis {
             name 'VARIANT'
-            values 'ubuntu-touch-hybris-rootfs', 'ubuntu-touch-android9plus-rootfs', 'ubuntu-touch-pdk-img'
+            values 'ubuntu-touch-hybris-rootfs', 'ubuntu-touch-android9plus-rootfs', 'ubuntu-touch-pdk-img', 'ubuntu-touch-pinephone-pro-img', 'ubuntu-touch-pinephone-img', 'ubuntu-touch-pinetab-img', 'ubuntu-touch-pinetab2-img'
           }
 
           axis {
@@ -62,7 +62,7 @@ pipeline {
           exclude {
               axis {
                   name 'VARIANT'
-                  values 'ubuntu-touch-pdk-img'
+                  values 'ubuntu-touch-pdk-img', 'ubuntu-touch-pinephone-pro-img', 'ubuntu-touch-pinephone-img', 'ubuntu-touch-pinetab-img', 'ubuntu-touch-pinetab2-img'
               }
               axis {
                   name 'ARCHITECTURE'

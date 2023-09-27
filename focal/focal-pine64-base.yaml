@@ -1,0 +1,88 @@
+{{- $variant := or .variant "mainline" -}}
+{{- $architecture := or .architecture "arm64" -}}
+{{- $cdimagesmirror := or .cdimagesmirror "http://cdimage.ubuntu.com" -}}
+{{- $additional_apt_repos := or .additional_apt_repos "http://repo.ubports.com/ focal_-_pine 2001" -}}
+
+architecture: {{ $architecture }}
+actions:
+  - action: recipe
+    description: Setup base rootfs
+    recipe: focal-base.yaml
+    variables:
+      architecture: {{ $architecture }}
+      cdimagesmirror: {{ $cdimagesmirror }}
+      skip_remove_apt_user: true
+      additional_apt_repos: {{ $additional_apt_repos }}
+
+  - action: recipe
+    description: Create Ubuntu Touch rootfs
+    recipe: ubuntu-touch-common.yaml
+    variables:
+      architecture: {{ $architecture }}
+      variant: {{ $variant }}
+      additional_package: >-
+        adbd
+        sshfs
+        git
+        mesa-v*-drivers
+        waydroid
+        waydroid-sensors
+        usb-modeswitch
+        usb-moded
+        libcurl3-nss
+        libgpiod2
+        build-essential
+        devscripts
+        equivs
+        alsa-ucm-conf
+        iio-sensor-proxy
+        mobile-usb-networking
+        systemd-repart
+        u-boot-tools
+        linux-firmware
+        initramfs-tools
+        u-boot-menu
+
+  - action: overlay
+    source: pine64/overlay
+    description: Adding Pine overlay
+    destination: /
+
+  - action: run
+    description: fix alsa
+    chroot: true
+    command: rm -r /usr/lib/systemd/user/pulseaudio.service.d/
+
+  - action: run
+    description: create mali group
+    chroot: true
+    command: /sbin/groupadd mali && usermod -aG mali phablet
+
+  - action: download
+    description: Fetch latest kernel ci build
+    url: https://gitlab.com/ook37/linux/-/jobs/artifacts/okpine-6.5-ut/download?job=build_phone
+    name: kernel
+    filename: kernel.zip
+    unpack: true
+    compression: zip
+
+  - action: overlay
+    description: Copying kernel to rootfs
+    origin: kernel
+    source: .
+    destination: /var/tmp/
+
+  - action: run
+    chroot: true
+    description: Installing kernel on rootfs (with common enables)
+    label: dpkg
+    command: dpkg -i /var/tmp/*.deb && /bin/rm /var/tmp/* -r && /bin/systemctl enable waydroid-container.service && /bin/systemctl enable resizefs.service
+
+  - action: run
+    chroot: true
+    script: ../scripts/try-depmod-installed.sh
+
+  - action: run
+    description: Remove apt caches to save space
+    chroot: true
+    command: rm -r /var/cache/apt/* /var/lib/apt/lists/*

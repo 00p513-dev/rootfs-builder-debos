@@ -1,0 +1,91 @@
+{{- $variant := or .variant "mainline" -}}
+{{- $architecture := or .architecture "arm64" -}}
+{{- $image := or .image (printf "ubuntu-touch-pinephone-%s.img" $architecture) -}}
+{{- $cdimagesmirror := or .cdimagesmirror "http://cdimage.ubuntu.com" -}}
+{{- $additional_apt_repos := or .additional_apt_repos "" -}}
+{{- $phablet_password := or .phablet_password "" }}
+
+architecture: {{ $architecture }}
+actions:
+  - action: recipe
+    description: Build pine base
+    recipe: focal-pine64-base.yaml
+    variables:
+      architecture: {{ $architecture }}
+      cdimagesmirror: {{ $cdimagesmirror }}
+      skip_remove_apt_user: true
+      additional_apt_repos: {{ $additional_apt_repos }}
+
+  - action: run
+    chroot: true
+    description: workaround gpsd default file
+    command: mv /etc/default/gpsd /etc/default/gpsd-ubports
+
+  - action: run
+    chroot: true
+    description: Install GPS + Modem support
+    label: apt
+    script: ../scripts/apt-install.sh eg25-manager gpsd libgps-dev python3-serial
+
+  - action: run
+    chroot: true
+    description: workaround gpsd default file
+    command: rm /etc/default/gpsd && mv /etc/default/gpsd-ubports /etc/default/gpsd
+
+  - action: run
+    chroot: true
+    description: Disable ModemManager and enable GPS
+    command: /bin/systemctl disable ModemManager && /bin/systemctl enable gpsd && /bin/systemctl enable load_agps
+
+# PHASE 3: build image
+  - action: image-partition
+    description: Creating image
+    imagename: {{ $image }}
+    imagesize: 6GB
+    partitiontype: gpt
+    mountpoints:
+      - mountpoint: /
+        partition: root
+      - mountpoint: /boot
+        partition: boot
+    partitions:
+      - name: boot
+        fs: ext4
+        start: 1M
+        end: 400MB
+        parttype: C12A7328-F81F-11D2-BA4B-00A0C93EC93B
+        flags: [ esp,boot ]
+      - name: root
+        fs: ext4
+        start: 400MB
+        end: 100%
+        parttype: B921B045-1DF0-41C3-AF44-4C6F280D3FAE
+
+  - action: filesystem-deploy
+    description: Deploying filesystem into image
+
+  - action: run
+    chroot: true
+    command: update-initramfs -u
+
+  - action: run
+    chroot: true
+    description: Make sure EXTLINUX is valid
+    script: pine64/scripts/zzz-u-boot-pine64
+
+# these guys need to be run at the very end so they don't break anything else
+  - action: overlay
+    description: Add post inst script for future kernels
+    source: pine64/files/last-pine64
+    destination: /etc/kernel/postinst.d
+
+  # polish.yaml must be run as the last step, as it contains the
+  # step to (re-)create /etc/writable symlinks and systemd-nspawn
+  # tends to overwrite them.
+  - action: recipe
+    description: Run common image polishing steps
+    recipe: ../polish.yaml
+    variables:
+      architecture: {{ $architecture }}
+      image: {{ $image }}
+      output_type: image
