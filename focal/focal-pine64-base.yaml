@@ -81,8 +81,3 @@ actions:
   - action: run
     chroot: true
     script: ../scripts/try-depmod-installed.sh
-
-  - action: run
-    description: Remove apt caches to save space
-    chroot: true
-    command: rm -r /var/cache/apt/* /var/lib/apt/lists/*
