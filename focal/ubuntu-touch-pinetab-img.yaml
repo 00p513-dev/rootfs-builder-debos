@@ -39,17 +39,21 @@ actions:
     partitiontype: gpt
     mountpoints:
       - mountpoint: /
-        partition: root
+        partition: system
       - mountpoint: /boot
         partition: boot
     partitions:
+      - name: loader
+        fs: none
+        start: 0%
+        end: 17MB
       - name: boot
         fs: ext4
         start: 17MB
         end: 300MB
         parttype: C12A7328-F81F-11D2-BA4B-00A0C93EC93B
         flags: [ esp,boot ]
-      - name: root
+      - name: system
         fs: ext4
         start: 300MB
         end: 100%

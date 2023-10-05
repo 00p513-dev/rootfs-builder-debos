@@ -1,23 +1,25 @@
-#!/bin/sh -ex
+#!/bin/bash -ex
 
 # Make symlink for Android's top level directories here, so that the generated
 # rootfs is ready to be installed on devices without system-image.
 
-mkdir -p /android/
+if [[ "$VARIANT" != "mainline" ]]; then
+    mkdir -p /android/
 
-for d in \
-    apex \
-    cache \
-    data \
-    factory \
-    firmware \
-    metadata \
-    odm \
-    persist \
-    product \
-    system \
-    vendor \
-; do
-    rm -rf /${d:?}
-    ln -sf /android/$d /$d
-done
+    for d in \
+        apex \
+        cache \
+        data \
+        factory \
+        firmware \
+        metadata \
+        odm \
+        persist \
+        product \
+        system \
+        vendor \
+    ; do
+        rm -rf /${d:?}
+        ln -sf /android/$d /$d
+    done
+fi
