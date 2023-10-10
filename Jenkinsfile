@@ -9,7 +9,6 @@ def build_image = {
       --fakemachine-backend kvm \
       -m 12G \
       --cpus $(nproc --all) \
-      -e "APT_PROXY:http://$(ip route get 8.8.8.8 | head -1 | cut -d\' \' -f7):3142" \
       -t "image:$IMAGE" -t "architecture:${ARCHITECTURE}"
   '''
   sh 'if [ "$POST_BUILD_XZ" = "1" ]; then xz -1f -Q --threads 0 "$IMAGE"; fi'
