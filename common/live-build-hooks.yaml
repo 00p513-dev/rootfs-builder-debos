@@ -7,7 +7,7 @@ actions:
     recipe: download-and-extract-deb.yaml
     variables:
       architecture: {{ .architecture }}
-      deb_url: http://archive.ubuntu.com/ubuntu/pool/main/l/live-build/live-build_3.0~a57-1ubuntu38.20.04.2_all.deb
+      deb_url: http://archive.ubuntu.com/ubuntu/pool/main/l/live-build/live-build_3.0~a57-1ubuntu38.20.04.3_all.deb
       deb_extract_target: /tmp/live-build
 
   - action: run
