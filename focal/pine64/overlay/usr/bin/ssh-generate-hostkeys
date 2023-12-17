@@ -1,0 +1,45 @@
+#!/bin/sh
+
+# Sometimes /etc/ssh isn't writable when the ssh job starts. Also, for some
+# reason we can't rely on the 'mounted /etc/ssh' event, it doesn't always fire.
+# This script works around both of those problems.
+wait_for_writable() {
+    while [ ! "$WRITABLE" ]; do
+        touch /etc/ssh/testfile && {
+            rm /etc/ssh/testfile
+            WRITABLE=true
+            break
+        }
+        sleep 1
+    done
+}
+
+KEYTYPES='rsa ecdsa ed25519'
+NEED_KEYS=
+
+# Opportunistically check if the keys all exist, before checking
+# if the path is writable.
+
+for keytype in $KEYTYPES; do
+    if [ ! -e "/etc/ssh/ssh_host_${keytype}_key" ]; then
+        NEED_KEYS=1
+        break
+    fi
+done
+
+if [ -z "$NEED_KEYS" ]; then
+    exit
+fi
+
+# Preliminary check seems like some keys are not found. However, we
+# can't know for sure if the path isn't writable yet. So, we wait until
+# the path is writable, and then check each key again.
+
+wait_for_writable
+
+for keytype in $KEYTYPES; do
+    if [ ! -e "/etc/ssh/ssh_host_${keytype}_key" ]; then
+        ssh-keygen -f "/etc/ssh/ssh_host_${keytype}_key" -N '' -t "${keytype}"
+    fi
+done
+
