@@ -3,7 +3,8 @@ Description=start resize script to increase rootfs to its partitions full size
 
 [Service]
 Type=oneshot
-ExecStart=/usr/sbin/resizefs.sh
+ExecStart=bash -c '/usr/sbin/resize2fs /dev/disk/by-label/userdata'
+ExecStop=/usr/bin/systemctl disable resizefs.service
 
 [Install]
 WantedBy=multi-user.target

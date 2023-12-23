@@ -40,8 +40,9 @@ actions:
         systemd-repart
         u-boot-tools
         linux-firmware
-        initramfs-tools
+        initramfs-tools-ubuntu-touch
         u-boot-menu
+        ubuntu-touch-config-common
 
   - action: overlay
     source: pine64/overlay
@@ -74,10 +75,15 @@ actions:
 
   - action: run
     chroot: true
-    description: Installing kernel on rootfs (with common enables)
+    description: Installing kernel on rootfs
     label: dpkg
-    command: dpkg -i /var/tmp/*.deb && /bin/rm /var/tmp/* -r && /bin/systemctl enable waydroid-container.service && /bin/systemctl enable resizefs.service
+    command: dpkg -i /var/tmp/*.deb && /bin/rm /var/tmp/* -r
 
   - action: run
     chroot: true
     script: ../scripts/try-depmod-installed.sh
+
+  - action: run
+    chroot: true
+    description: Ensure waydroid is enabled and userdata resizes correctly
+    command: /bin/systemctl enable waydroid-container.service && /bin/systemctl enable resizefs.service

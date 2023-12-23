@@ -17,6 +17,11 @@ actions:
       additional_apt_repos: {{ $additional_apt_repos }}
 
   - action: overlay
+    source: pine64/tab-overlay
+    description: Adding PT/PT2 overlay
+    destination: /
+
+  - action: overlay
     description: Add PT1 bootloader
     source: pine64/files/tab1-boot
     destination: /boot
@@ -42,6 +47,8 @@ actions:
         partition: system
       - mountpoint: /boot
         partition: boot
+      - mountpoint: /userdata
+        partition: userdata
     partitions:
       - name: loader
         fs: none
@@ -56,6 +63,10 @@ actions:
       - name: system
         fs: ext4
         start: 300MB
+        end: 5800MB
+      - name: userdata
+        fs: ext4
+        start: 5800MB
         end: 100%
         parttype: B921B045-1DF0-41C3-AF44-4C6F280D3FAE
 

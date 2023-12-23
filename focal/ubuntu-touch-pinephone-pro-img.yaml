@@ -16,6 +16,11 @@ actions:
       skip_remove_apt_user: true
       additional_apt_repos: {{ $additional_apt_repos }}
 
+  - action: overlay
+    source: pine64/phone-overlay
+    description: Adding PP/PPP overlay
+    destination: /
+
   - action: run
     chroot: true
     description: workaround gpsd default file
@@ -48,6 +53,8 @@ actions:
         partition: system
       - mountpoint: /boot
         partition: boot
+      - mountpoint: /userdata
+        partition: userdata
     partitions:
       - name: loader
         fs: none
@@ -62,6 +69,10 @@ actions:
       - name: system
         fs: ext4
         start: 300MB
+        end: 5800MB
+      - name: userdata
+        fs: ext4
+        start: 5800MB
         end: 100%
         parttype: B921B045-1DF0-41C3-AF44-4C6F280D3FAE
 
