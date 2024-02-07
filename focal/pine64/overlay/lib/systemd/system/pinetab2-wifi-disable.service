@@ -1,6 +1,0 @@
-[Unit]
-Description=Disable PineTab2 experimental WiFi modules
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/disable-pinetab2-wifi.sh

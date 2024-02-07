@@ -1,6 +1,0 @@
-[Unit]
-Description=Enable PineTab2 experimental WiFi modules
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/enable-pinetab2-wifi.sh

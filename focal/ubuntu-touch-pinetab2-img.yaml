@@ -17,6 +17,11 @@ actions:
       additional_apt_repos: {{ $additional_apt_repos }}
 
   - action: overlay
+    source: pine64/tab-overlay
+    description: Adding PT/PT2 overlay
+    destination: /
+
+  - action: overlay
     description: Add PT2 bootloader
     source: pine64/files/tab2-boot
     destination: /boot
@@ -31,6 +36,25 @@ actions:
     description: Enable u-boot-patch
     command: /bin/systemctl enable /usr/lib/systemd/system-shutdown/u-boot-patch.service
 
+  - action: download
+    description: Fetch latest wifi firmware
+    url: https://gitlab.com/pine64-org/bes2600-firmware/-/archive/main/bes2600-firmware-main.zip
+    name: pt2wifi
+    filename: pt2wifi.zip
+    unpack: true
+    compression: zip
+
+  - action: overlay
+    description: Copying wifi firmware to rootfs
+    origin: pt2wifi
+    source: bes2600-firmware-main/firmware/
+    destination: /lib/firmware/
+
+  - action: run
+    chroot: true
+    description: Enable bluetooth detection
+    command: /bin/systemctl enable /usr/lib/systemd/system/pinetab2-bluetooth.service
+
 # PHASE 3: build image
   - action: image-partition
     description: Creating image
@@ -42,6 +66,8 @@ actions:
         partition: system
       - mountpoint: /boot
         partition: boot
+      - mountpoint: /userdata
+        partition: userdata
     partitions:
       - name: loader
         fs: none
@@ -56,6 +82,10 @@ actions:
       - name: system
         fs: ext4
         start: 300MB
+        end: 5800MB
+      - name: userdata
+        fs: ext4
+        start: 5800MB
         end: 100%
         parttype: B921B045-1DF0-41C3-AF44-4C6F280D3FAE
 
