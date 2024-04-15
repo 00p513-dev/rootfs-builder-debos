@@ -1,0 +1,95 @@
+{{- $variant := "mainline" -}}
+{{- $architecture := or .architecture "arm64" -}}
+{{- $image := or .image (printf "ubuntu-touch-kukui-%s.img" $architecture) -}}
+{{- $cdimagesmirror := or .cdimagesmirror "http://cdimage.ubuntu.com" -}}
+{{- $additional_apt_repos := or .additional_apt_repos "" -}}
+{{- $phablet_password := or .phablet_password "" }}
+
+architecture: {{ $architecture }}
+actions:
+  - action: recipe
+    description: Setup base rootfs
+    recipe: focal-base.yaml
+    variables:
+      architecture: {{ $architecture }}
+      cdimagesmirror: {{ $cdimagesmirror }}
+      skip_remove_apt_user: true
+      additional_apt_repos: {{ $additional_apt_repos }}
+
+  - action: recipe
+    description: Create Ubuntu Touch rootfs
+    recipe: ubuntu-touch-common.yaml
+    variables:
+      architecture: {{ $architecture }}
+      variant: {{ $variant }}
+      additional_package: >-
+        adbd
+
+  - action: overlay
+    source: kukui/overlay
+    description: Adding kukui overlay
+    destination: /
+
+    # TODO: should have a task pacakge at some point.
+  - action: run
+    description: Install packages
+    chroot: true
+    script: >-
+      ../scripts/apt-install.sh --no-install-recommends
+      linux-firmware
+      device-google-kukui
+      depthcharge-tools
+      initramfs-tools
+    label: apt-install.sh
+
+  - action: run
+    descriptions: Run PDK hooks
+    chroot: true
+    script: ./pdk/hooks/run-hooks.sh
+    label: run-parts
+
+  - action: image-partition
+    description: Creating image
+    imagename: {{ $image }}
+    imagesize: 15GB
+    partitiontype: msdos
+    mountpoints:
+      - mountpoint: /
+        partition: systemanddata
+      - mountpoint: /boot
+        partition: boot
+    partitions:
+      - name: KERN-A
+        fs: none
+        start: 0%
+        end: 32MB
+      - name: boot
+        fs: ext2
+        start: 65MB
+        end: 500MB
+      - name: systemanddata
+        fs: ext4
+        start: 500MB
+        end: 100%
+
+  - action: filesystem-deploy
+    description: Deploying filesystem into image
+
+  - action: run
+    chroot: true
+    command: update-initramfs -u
+
+  - action: run
+    chroot: true
+    command: mkdepthcharge -d /boot/vmlinuz*mt8183+ -i /boot/init* -b /usr/lib/linux*mt8183+/mediatek/mt8183* -c "console=tty0"
+
+  # polish.yaml must be run as the last step, as it contains the
+  # step to (re-)create /etc/writable symlinks and systemd-nspawn
+  # tends to overwrite them.
+  - action: recipe
+    description: Run common image polishing steps
+    recipe: ../polish.yaml
+    variables:
+      architecture: {{ $architecture }}
+      image: {{ $image }}
+      output_type: image
